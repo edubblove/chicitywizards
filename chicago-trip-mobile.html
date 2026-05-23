@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1f4e8a">
+<title>Chicago Trip · Jun 7–11</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { overflow-x: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    background: #f4f6f8; color: #222; line-height: 1.45;
+    padding-bottom: 80px;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: linear-gradient(135deg, #b22234, #1f4e8a);
+    color: white; padding: 12px 14px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .hamburger {
+    background: rgba(255,255,255,0.15); border: none; color: white;
+    width: 40px; height: 40px; border-radius: 8px;
+    font-size: 1.3em; cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+  }
+  .topbar-title h1 { font-size: 1.05em; line-height: 1.1; }
+  .topbar-title p { font-size: 0.72em; opacity: 0.85; }
+
+  /* DRAWER */
+  .drawer-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 90; opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .drawer-overlay.open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: min(88%, 360px); background: white;
+    z-index: 100; transform: translateX(-100%);
+    transition: transform 0.3s; overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-header {
+    background: #1f4e8a; color: white;
+    padding: 16px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .drawer-header h2 { font-size: 1.1em; }
+  .drawer-header button {
+    background: rgba(255,255,255,0.2); border: none;
+    color: white; width: 32px; height: 32px;
+    border-radius: 50%; cursor: pointer; font-size: 1.1em;
+  }
+  .drawer-tabs {
+    display: flex; background: #f0f4f8;
+    border-bottom: 1px solid #ddd;
+  }
+  .drawer-tabs button {
+    flex: 1; padding: 12px 6px; border: none;
+    background: transparent; cursor: pointer;
+    font-weight: bold; font-size: 0.78em; color: #555;
+    border-bottom: 3px solid transparent;
+  }
+  .drawer-tabs button.active {
+    color: #1f4e8a; border-bottom-color: #1f4e8a; background: white;
+  }
+  .drawer-content { padding: 16px; flex: 1; }
+  .drawer-pane { display: none; }
+  .drawer-pane.active { display: block; }
+
+  /* Transportation items */
+  .transport-item {
+    padding: 10px; margin-bottom: 8px;
+    border-left: 3px solid #b22234;
+    background: #f9f9f9; border-radius: 5px;
+    font-size: 0.88em;
+  }
+  .transport-item strong { display: block; color: #1f4e8a; }
+  .transport-item .price {
+    float: right; font-weight: bold; color: #2a7a3a; font-size: 0.95em;
+  }
+  .rank {
+    display: inline-block; width: 22px; height: 22px;
+    background: #1f4e8a; color: white; border-radius: 50%;
+    text-align: center; line-height: 22px; font-size: 0.8em; margin-right: 5px;
+  }
+
+  /* Itinerary list (in drawer) */
+  .itin-header-row {
+    text-align: center; font-weight: bold; color: #1f4e8a;
+    padding-bottom: 8px; border-bottom: 1px dashed #ccc; margin-bottom: 10px;
+  }
+  .export-btns { display: flex; gap: 6px; margin-bottom: 12px; }
+  .export-btns button {
+    flex: 1; padding: 9px; border: none; border-radius: 6px;
+    font-weight: bold; font-size: 0.85em; color: white;
+    background: #16a34a; cursor: pointer;
+  }
+  .export-btns button.jpeg { background: #d97706; }
+  .overlap-warning {
+    background: #fee2e2; color: #991b1b;
+    padding: 8px 10px; border-radius: 5px;
+    font-size: 0.82em; margin-bottom: 10px; display: none;
+  }
+  .overlap-warning.show { display: block; }
+  .day-block { margin-bottom: 12px; }
+  .day-block h4 {
+    background: #f0f4f8; padding: 6px 10px;
+    border-radius: 5px; font-size: 0.9em; margin-bottom: 6px;
+  }
+  .itin-item {
+    padding: 9px 30px 9px 10px; margin-bottom: 5px;
+    background: #e0f2fe; border-radius: 6px;
+    font-size: 0.85em; border-left: 3px solid #0ea5e9;
+    position: relative;
+  }
+  .itin-item.overlap {
+    background: linear-gradient(90deg, #fecaca, #fed7aa);
+    border-left-color: #dc2626;
+  }
+  .itin-item .time { font-weight: bold; display: block; font-size: 0.9em; }
+  .itin-item .tag {
+    display: inline-block; font-size: 0.72em;
+    padding: 2px 7px; border-radius: 8px;
+    margin-top: 4px; font-weight: bold;
+  }
+  .tag.self { background: #ddd6fe; color: #5b21b6; }
+  .tag.group { background: #fed7aa; color: #9a3412; }
+  .tag.justus { background: #fbcfe8; color: #9d174d; }
+  .itin-item .remove {
+    position: absolute; right: 6px; top: 6px;
+    background: #dc2626; color: white; border: none;
+    border-radius: 50%; width: 22px; height: 22px;
+    font-size: 0.8em; cursor: pointer;
+  }
+  .person-toggle { display: flex; gap: 4px; margin-bottom: 12px; }
+  .person-toggle button {
+    flex: 1; padding: 9px; border: 2px solid #1f4e8a;
+    background: white; color: #1f4e8a; border-radius: 6px;
+    font-weight: bold; cursor: pointer; font-size: 0.9em;
+  }
+  .person-toggle button.active { background: #1f4e8a; color: white; }
+  .empty-itin {
+    color: #888; font-style: italic; text-align: center;
+    padding: 20px; font-size: 0.88em;
+  }
+
+  /* MAP — HERO SECTION */
+  .map-section {
+    background: white; margin: 10px;
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .map-section-header {
+    background: #1f4e8a; color: white;
+    padding: 10px 14px; font-weight: bold;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.92em;
+  }
+  #tripMap { height: 320px; width: 100%; }
+  .map-legend {
+    padding: 6px 10px; font-size: 0.72em;
+    display: flex; gap: 8px; flex-wrap: wrap;
+    border-top: 1px solid #eee;
+  }
+  .map-legend span { display: flex; align-items: center; gap: 3px; }
+  .map-legend .pin {
+    width: 11px; height: 11px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg); display: inline-block;
+    border: 1.5px solid white;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  /* CATEGORY TABS */
+  .cat-tabs {
+    display: flex; gap: 4px; padding: 8px 10px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    background: white; margin: 0 10px 10px;
+    border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .cat-tabs::-webkit-scrollbar { display: none; }
+  .cat-tabs button {
+    flex-shrink: 0; padding: 9px 13px; border: none;
+    background: transparent; border-radius: 6px;
+    cursor: pointer; font-weight: bold; font-size: 0.85em;
+    color: #555; white-space: nowrap;
+  }
+  .cat-tabs button.active { background: #1f4e8a; color: white; }
+
+  /* EVENTS */
+  .tab-content { display: none; padding: 0 10px; }
+  .tab-content.active { display: block; }
+  .section-title {
+    background: #1f4e8a; color: white;
+    padding: 8px 12px; border-radius: 8px;
+    margin-bottom: 10px; font-size: 1em;
+  }
+  .day-title {
+    background: #1f4e8a; color: white;
+    padding: 8px 12px; border-radius: 8px;
+    margin: 12px 0 10px; font-size: 1em;
+  }
+  .day-title small { float: right; opacity: 0.85; font-size: 0.78em; font-weight: normal; }
+
+  .event {
+    background: white; border-radius: 10px;
+    padding: 12px; margin-bottom: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    border-top: 4px solid #b22234;
+  }
+  .event.work { border-top-color: #555; }
+  .event.food { border-top-color: #d97706; }
+  .event.sport { border-top-color: #16a34a; }
+  .event.travel { border-top-color: #8b5cf6; }
+  .event.sight { border-top-color: #0ea5e9; }
+  .event.coffee { border-top-color: #92400e; }
+  .event.bar { border-top-color: #be185d; }
+  .event.must { background: #fffbeb; border-top-color: #f59e0b; }
+  .event h3 { font-size: 1.02em; margin-bottom: 2px; }
+  .event .subtitle { font-size: 0.78em; color: #777; font-style: italic; margin-bottom: 6px; }
+  .event .when {
+    background: #eef2f7; color: #1f4e8a;
+    padding: 5px 9px; border-radius: 5px;
+    font-size: 0.78em; font-weight: bold;
+    margin: 6px 0; display: inline-block;
+  }
+  .event .when.anytime { background: #f3e8ff; color: #6b21a8; }
+  .event p.desc { font-size: 0.88em; color: #444; margin: 7px 0; }
+  .badge {
+    display: inline-block; padding: 2px 7px;
+    border-radius: 10px; font-size: 0.74em;
+    font-weight: bold; margin-right: 3px;
+  }
+  .badge.price { background: #dcfce7; color: #166534; }
+  .badge.free { background: #d1fae5; color: #065f46; }
+  .badge.dist { background: #e0f2fe; color: #075985; }
+  .badge.dur { background: #fef3c7; color: #92400e; }
+  .badge.must { background: #f59e0b; color: white; }
+  .meta { font-size: 0.82em; color: #555; margin: 3px 0; }
+  .btn-row { display: flex; gap: 6px; margin-top: 10px; }
+  .add-btn, .directions-btn {
+    flex: 1; padding: 11px 8px; border: none;
+    border-radius: 6px; font-weight: bold;
+    font-size: 0.88em; cursor: pointer; color: white;
+  }
+  .add-btn { background: #1f4e8a; }
+  .directions-btn { background: #16a34a; }
+
+  /* FLOATING ACTION BUTTON */
+  .fab {
+    position: fixed; bottom: 20px; right: 20px;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: #1f4e8a; color: white;
+    border: none; cursor: pointer; font-size: 1.3em;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    z-index: 30; display: flex;
+    align-items: center; justify-content: center;
+  }
+  .fab .badge-count {
+    position: absolute; top: -4px; right: -4px;
+    background: #dc2626; color: white;
+    border-radius: 50%; width: 22px; height: 22px;
+    font-size: 0.75em; font-weight: bold;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid white;
+  }
+
+  /* MODALS */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55); z-index: 200;
+    align-items: flex-end; justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: white; width: 100%;
+    border-radius: 16px 16px 0 0;
+    padding: 20px; max-height: 92vh; overflow-y: auto;
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.2);
+  }
+  .modal h3 { color: #1f4e8a; margin-bottom: 5px; }
+  .modal .event-name {
+    color: #444; font-size: 0.88em;
+    margin-bottom: 16px; font-style: italic;
+  }
+  .field { margin-bottom: 14px; }
+  .field-label {
+    display: block; font-weight: bold; font-size: 0.9em;
+    margin-bottom: 7px; color: #1f4e8a;
+  }
+  .options { display: flex; gap: 6px; flex-wrap: wrap; }
+  .options label {
+    flex: 1; min-width: 80px; text-align: center;
+    padding: 10px 8px; border: 2px solid #ddd;
+    border-radius: 6px; cursor: pointer; font-size: 0.86em;
+  }
+  .options input { display: none; }
+  .options label:has(input:checked) {
+    border-color: #1f4e8a; background: #1f4e8a; color: white;
+  }
+  .dt-row { display: flex; flex-direction: column; gap: 6px; }
+  input[type="time"], select {
+    width: 100%; padding: 10px;
+    border: 1px solid #ccc; border-radius: 6px; font-size: 1em;
+  }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .modal-actions button {
+    flex: 1; padding: 12px; border: none;
+    border-radius: 6px; font-weight: bold; cursor: pointer;
+  }
+  .btn-confirm { background: #1f4e8a; color: white; }
+  .btn-cancel { background: #eee; color: #333; }
+
+  /* DIRECTIONS MODAL */
+  .dir-modal-header {
+    background: linear-gradient(135deg, #16a34a, #0f766e);
+    color: white; margin: -20px -20px 16px;
+    padding: 16px 20px; border-radius: 16px 16px 0 0;
+    position: relative;
+  }
+  .dir-modal-header h3 { color: white; }
+  .dir-modal-header p { font-size: 0.85em; opacity: 0.9; }
+  .dir-modal-header .close-x {
+    position: absolute; right: 12px; top: 12px;
+    background: rgba(255,255,255,0.2); color: white;
+    border: none; width: 32px; height: 32px;
+    border-radius: 50%; font-size: 1.1em; cursor: pointer;
+  }
+  .dir-route {
+    background: #f0fdf4; border-left: 4px solid #16a34a;
+    padding: 12px 14px; border-radius: 6px; margin-bottom: 12px;
+  }
+  .dir-route .route-title { font-weight: bold; color: #14532d; margin-bottom: 5px; }
+  .dir-route .route-meta {
+    display: flex; gap: 12px; font-size: 0.82em;
+    color: #166534; margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .dir-steps { list-style: none; padding: 0; counter-reset: step; }
+  .dir-steps li {
+    counter-increment: step;
+    padding: 9px 8px 9px 40px; position: relative;
+    font-size: 0.92em; border-bottom: 1px dashed #ddd;
+  }
+  .dir-steps li:last-child { border-bottom: none; }
+  .dir-steps li::before {
+    content: counter(step); position: absolute;
+    left: 6px; top: 9px;
+    background: #16a34a; color: white;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.82em; font-weight: bold;
+  }
+  .dir-note {
+    background: #fef3c7; padding: 10px 14px;
+    border-radius: 6px; font-size: 0.86em;
+    color: #78350f; margin-top: 10px;
+  }
+
+  /* MAP POPUP */
+  .leaflet-popup-content { font-family: inherit; font-size: 0.85em; }
+  .leaflet-popup-content strong { color: #1f4e8a; }
+  .pop-dist { color: #2a7a3a; font-weight: bold; }
+  .pop-btn {
+    margin-top: 6px; padding: 5px 10px;
+    background: #16a34a; color: white; border: none;
+    border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.85em;
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <button class="hamburger" onclick="openDrawer()">☰</button>
+  <div class="topbar-title">
+    <h1>✈️ Chicago Trip · Jun 7–11</h1>
+    <p>Erica & Renee · Staypineapple Hotel</p>
+  </div>
+</div>
+
+<!-- DRAWER MENU -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <h2>Menu</h2>
+    <button onclick="closeDrawer()">×</button>
+  </div>
+  <div class="drawer-tabs">
+    <button class="active" data-pane="transport">🚇 Transport</button>
+    <button data-pane="erica">👩 Erica</button>
+    <button data-pane="renee">👩 Renee</button>
+  </div>
+  <div class="drawer-content">
+
+    <!-- TRANSPORTATION PANE -->
+    <div class="drawer-pane active" data-pane-content="transport">
+      <p style="font-size:0.8em;color:#666;margin-bottom:10px;">Cheapest → priciest</p>
+      <div class="transport-item"><span class="price">FREE</span><strong><span class="rank">1</span>Walking</strong>Most Loop sights &lt;1 mi.</div>
+      <div class="transport-item"><span class="price">$2.25</span><strong><span class="rank">2</span>CTA Bus</strong>Single ride via Ventra.</div>
+      <div class="transport-item"><span class="price">$2.50</span><strong><span class="rank">3</span>CTA "L" Train</strong>Loop ride. Blue Line ORD = $5.</div>
+      <div class="transport-item"><span class="price">$5.00</span><strong><span class="rank">4</span>Ventra Day Pass</strong>Unlimited CTA bus + train.</div>
+      <div class="transport-item"><span class="price">$16.50</span><strong><span class="rank">5</span>Divvy Day Pass</strong>Unlimited bike rides.</div>
+      <div class="transport-item"><span class="price">$4–8</span><strong><span class="rank">6</span>Metra Train</strong>Suburban rail.</div>
+      <div class="transport-item"><span class="price">$12–25</span><strong><span class="rank">7</span>Uber / Lyft</strong>ORD ↔ Loop ≈ $35–55.</div>
+      <div class="transport-item"><span class="price">$45+</span><strong><span class="rank">8</span>Taxi from ORD</strong>Plus tip.</div>
+    </div>
+
+    <!-- ERICA PANE -->
+    <div class="drawer-pane" data-pane-content="erica">
+      <div class="itin-header-row">Erica's Itinerary · Jun 7–11</div>
+      <div class="export-btns">
+        <button onclick="exportPDF('erica')">📄 PDF</button>
+        <button class="jpeg" onclick="exportJPEG('erica')">🖼️ JPEG</button>
+      </div>
+      <div class="overlap-warning" id="erica-warning">⚠️ Overlapping events highlighted!</div>
+      <div id="erica-content"><p class="empty-itin">Erica's schedule is empty.</p></div>
+    </div>
+
+    <!-- RENEE PANE -->
+    <div class="drawer-pane" data-pane-content="renee">
+      <div class="itin-header-row">Renee's Itinerary · Jun 7–11</div>
+      <div class="export-btns">
+        <button onclick="exportPDF('renee')">📄 PDF</button>
+        <button class="jpeg" onclick="exportJPEG('renee')">🖼️ JPEG</button>
+      </div>
+      <div class="overlap-warning" id="renee-warning">⚠️ Overlapping events highlighted!</div>
+      <div id="renee-content"><p class="empty-itin">Renee's schedule is empty.</p></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MAP (HERO) -->
+<div class="map-section">
+  <div class="map-section-header">
+    <span>🗺️ Trip Map</span>
+    <span style="font-size:0.78em;opacity:0.85;">Tap card to zoom</span>
+  </div>
+  <div id="tripMap"></div>
+  <div class="map-legend">
+    <span><span class="pin" style="background:#1f4e8a"></span>Hotel</span>
+    <span><span class="pin" style="background:#555"></span>Work</span>
+    <span><span class="pin" style="background:#0ea5e9"></span>Sight</span>
+    <span><span class="pin" style="background:#f59e0b"></span>Must</span>
+    <span><span class="pin" style="background:#16a34a"></span>Sport</span>
+    <span><span class="pin" style="background:#d97706"></span>Food</span>
+    <span><span class="pin" style="background:#92400e"></span>Coffee</span>
+    <span><span class="pin" style="background:#be185d"></span>Bar</span>
+  </div>
+</div>
+
+<!-- CATEGORY TABS -->
+<nav class="cat-tabs">
+  <button class="active" data-tab="schedule">📅 Schedule</button>
+  <button data-tab="sightseeing">🏙️ Sights</button>
+  <button data-tab="sports">⚾ Sports</button>
+  <button data-tab="restaurants">🍽️ Food</button>
+  <button data-tab="coffee">☕ Coffee</button>
+  <button data-tab="bars">🍸 Bars</button>
+</nav>
+
+<!-- SCHEDULE -->
+<section class="tab-content active" data-tab-content="schedule">
+  <h3 class="day-title">Sunday, Jun 7 <small>Arrival</small></h3>
+  <div class="event travel" data-date="2025-06-07" data-start="08:00" data-end="14:18" data-title="Flight LAX → ORD"><h3>✈️ Flight LAX → ORD</h3><div class="when"></div><div class="meta"><span class="badge dur">6h 18m</span></div><p class="desc">Depart 8:00 AM, arrive ORD 2:18 PM.</p></div>
+  <div class="event travel" data-date="2025-06-07" data-start="14:30" data-end="15:45" data-title="ORD → Hotel (Blue Line)"><h3>🚇 ORD → Hotel</h3><div class="when"></div><div class="meta"><span class="badge price">$5</span><span class="badge dur">75 min</span></div><p class="desc">Blue Line to Washington Station.</p></div>
+
+  <h3 class="day-title">Monday, Jun 8 <small>Work</small></h3>
+  <div class="event work" data-date="2025-06-08" data-start="09:00" data-end="17:00" data-title="LinkedIn Chicago (Erica's Work)"><h3>💼 LinkedIn Chicago</h3><p class="subtitle">Erica's Work</p><div class="when"></div><div class="meta"><span class="badge dur">8 hr</span><span class="badge dist">0.6 mi</span></div><p class="desc">525 W Monroe St.</p></div>
+  <div class="event work" data-date="2025-06-08" data-start="09:00" data-end="17:00" data-title="OFI Chicago (Renee's Work)"><h3>💼 OFI Chicago</h3><p class="subtitle">Renee's Work</p><div class="when"></div><div class="meta"><span class="badge dur">8 hr</span><span class="badge dist">0.2 mi</span></div><p class="desc">24 E Washington St #1000.</p></div>
+
+  <h3 class="day-title">Tuesday, Jun 9 <small>Work</small></h3>
+  <div class="event work" data-date="2025-06-09" data-start="09:00" data-end="17:00" data-title="LinkedIn Chicago (Erica's Work)"><h3>💼 LinkedIn Chicago</h3><p class="subtitle">Erica's Work</p><div class="when"></div><div class="meta"><span class="badge dur">8 hr</span></div><p class="desc">525 W Monroe St.</p></div>
+  <div class="event work" data-date="2025-06-09" data-start="09:00" data-end="17:00" data-title="OFI Chicago (Renee's Work)"><h3>💼 OFI Chicago</h3><p class="subtitle">Renee's Work</p><div class="when"></div><div class="meta"><span class="badge dur">8 hr</span></div><p class="desc">24 E Washington St #1000.</p></div>
+
+  <h3 class="day-title">Thursday, Jun 11 <small>Departure</small></h3>
+  <div class="event travel" data-date="2025-06-11" data-start="17:00" data-end="18:30" data-title="Hotel → ORD"><h3>🚇 Hotel → ORD</h3><div class="when"></div><div class="meta"><span class="badge price">$5</span><span class="badge dur">75 min</span></div><p class="desc">Blue Line back to airport.</p></div>
+</section>
+
+<!-- SIGHTSEEING -->
+<section class="tab-content" data-tab-content="sightseeing">
+  <h3 class="section-title">🏙️ Sightseeing</h3>
+  <div class="event must" data-title="Harry Potter Chicago"><h3>⚡ Harry Potter Chicago <span class="badge must">MUST</span></h3><div class="when"></div><div class="meta"><span class="badge price">$30–55</span><span class="badge dur">2 hr</span><span class="badge dist">~1 mi</span></div><p class="desc">Immersive HP experience. Book ahead!</p></div>
+  <div class="event sight" data-title="The Bean (Cloud Gate)"><h3>🫘 The Bean</h3><div class="when"></div><div class="meta"><span class="badge free">FREE</span><span class="badge dur">45 min</span><span class="badge dist">0.4 mi</span></div><p class="desc">Millennium Park mirror sculpture.</p></div>
+  <div class="event sight" data-title="360 Chicago"><h3>🌆 360 Chicago (Tilt!)</h3><div class="when"></div><div class="meta"><span class="badge price">$30</span><span class="badge dur">1.5 hr</span><span class="badge dist">1 mi</span></div><p class="desc">94th floor — tilt out over Michigan Ave.</p></div>
+  <div class="event sight" data-title="Art Institute of Chicago"><h3>🎨 Art Institute</h3><div class="when"></div><div class="meta"><span class="badge price">$32</span><span class="badge dur">2.5 hr</span><span class="badge dist">0.4 mi</span></div><p class="desc">American Gothic, Nighthawks, Monet.</p></div>
+  <div class="event sight" data-title="Magnificent Mile"><h3>🛍️ Magnificent Mile</h3><div class="when"></div><div class="meta"><span class="badge free">FREE</span><span class="badge dur">1.5 hr</span><span class="badge dist">0.5 mi</span></div><p class="desc">N. Michigan Ave shopping.</p></div>
+  <div class="event sight" data-title="Wendella Boat Tour"><h3>🛥️ Wendella Boat Tour</h3><div class="when"></div><div class="meta"><span class="badge price">$46</span><span class="badge dur">1.5 hr</span><span class="badge dist">0.6 mi</span></div><p class="desc">Architecture river cruise.</p></div>
+  <div class="event sight" data-title="Skydeck at Willis Tower"><h3>🏙️ Skydeck @ Willis</h3><div class="when"></div><div class="meta"><span class="badge price">$32</span><span class="badge dur">1.5 hr</span><span class="badge dist">0.5 mi</span></div><p class="desc">The Ledge — 1,353 ft up.</p></div>
+  <div class="event sight" data-title="Navy Pier"><h3>🎡 Navy Pier</h3><div class="when"></div><div class="meta"><span class="badge price">$19</span><span class="badge dur">2 hr</span><span class="badge dist">1.2 mi</span></div><p class="desc">Centennial Wheel + lake views.</p></div>
+  <div class="event sight" data-title="Chicago Riverwalk"><h3>🚶 Riverwalk</h3><div class="when"></div><div class="meta"><span class="badge free">FREE</span><span class="badge dur">1.5 hr</span><span class="badge dist">0.3 mi</span></div><p class="desc">Best at dusk.</p></div>
+  <div class="event sight" data-title="Field Museum"><h3>🦖 Field Museum</h3><div class="when"></div><div class="meta"><span class="badge price">$30</span><span class="badge dur">2.5 hr</span><span class="badge dist">1.3 mi</span></div><p class="desc">SUE the T. rex.</p></div>
+  <div class="event sight" data-title="Shedd Aquarium"><h3>🐬 Shedd Aquarium</h3><div class="when"></div><div class="meta"><span class="badge price">$40</span><span class="badge dur">2 hr</span><span class="badge dist">1.4 mi</span></div><p class="desc">Best skyline view from steps.</p></div>
+  <div class="event sight" data-title="Buckingham Fountain"><h3>⛲ Buckingham Fountain</h3><div class="when"></div><div class="meta"><span class="badge free">FREE</span><span class="badge dur">45 min</span><span class="badge dist">0.6 mi</span></div><p class="desc">Grant Park icon.</p></div>
+  <div class="event sight" data-title="Sneakerhead University"><h3>👟 Sneakerhead U</h3><div class="when"></div><div class="meta"><span class="badge price">$$</span><span class="badge dur">1 hr</span><span class="badge dist">1.5 mi</span></div><p class="desc">Rare sneaker shop.</p></div>
+  <div class="event sight" data-title="Alice & Wonder"><h3>🛍️ Alice & Wonder</h3><div class="when"></div><div class="meta"><span class="badge price">$$</span><span class="badge dur">45 min</span><span class="badge dist">3 mi</span></div><p class="desc">Lincoln Park boutique.</p></div>
+  <div class="event sight" data-title="Ride the L Train"><h3>🚆 Ride the "L"</h3><div class="when"></div><div class="meta"><span class="badge price">$2.50</span><span class="badge dur">1 hr</span></div><p class="desc">Elevated Loop circle views.</p></div>
+</section>
+
+<!-- SPORTS -->
+<section class="tab-content" data-tab-content="sports">
+  <h3 class="section-title">⚾ Sports</h3>
+  <div class="event sport" data-date="2025-06-07" data-start="19:30" data-end="22:30" data-title="Giants @ Cubs"><h3>⚾ Giants @ Cubs</h3><p class="subtitle">SF Giants vs. Chicago Cubs</p><div class="when"></div><div class="meta"><span class="badge price">$25–120</span><span class="badge dur">~3 hr</span><span class="badge dist">7 mi</span></div><p class="desc">🏟️ Wrigley Field. Red Line to Addison.</p></div>
+  <div class="event sport" data-date="2025-06-09" data-start="18:40" data-end="21:40" data-title="Braves @ White Sox (Tue)"><h3>⚾ Braves @ White Sox</h3><p class="subtitle">Atlanta Braves vs. Chicago White Sox</p><div class="when"></div><div class="meta"><span class="badge price">$15–80</span><span class="badge dur">~3 hr</span><span class="badge dist">4 mi</span></div><p class="desc">🏟️ Rate Field. Red Line to Sox-35th. ⚠️ Overlaps WNBA.</p></div>
+  <div class="event sport" data-date="2025-06-10" data-start="18:40" data-end="21:40" data-title="Braves @ White Sox (Wed)"><h3>⚾ Braves @ White Sox</h3><p class="subtitle">Atlanta Braves vs. Chicago White Sox</p><div class="when"></div><div class="meta"><span class="badge price">$15–80</span><span class="badge dur">~3 hr</span><span class="badge dist">4 mi</span></div><p class="desc">🏟️ Rate Field. Easier night (no work next day).</p></div>
+  <div class="event sport" data-date="2025-06-09" data-start="18:00" data-end="20:30" data-title="Chicago Sky vs Atlanta Dream (Commissioner's Cup)"><h3>🏀 Sky vs. Dream <span class="badge must">CUP</span></h3><p class="subtitle">Commissioner's Cup</p><div class="when"></div><div class="meta"><span class="badge price">$25–150</span><span class="badge dur">~2.5 hr</span><span class="badge dist">~10 mi</span></div><p class="desc">🏟️ Wintrust Arena. ⚠️ Overlaps Sox.</p></div>
+  <div class="event sport" data-title="Wrigley Field Tour"><h3>🏟️ Wrigley Field Tour</h3><div class="when"></div><div class="meta"><span class="badge price">$30</span><span class="badge dur">1.5 hr</span><span class="badge dist">7 mi</span></div><p class="desc">Tour historic Wrigley.</p></div>
+</section>
+
+<!-- RESTAURANTS -->
+<section class="tab-content" data-tab-content="restaurants">
+  <h3 class="section-title">🍽️ Restaurants</h3>
+  <div class="event food" data-title="Lou Malnati's"><h3>🍕 Lou Malnati's</h3><div class="when"></div><div class="meta"><span class="badge price">~$30</span><span class="badge dur">1.5 hr</span><span class="badge dist">0.4 mi</span></div><p class="desc">Iconic deep dish.</p></div>
+  <div class="event food" data-title="Lia Tavern"><h3>🍝 Lia Tavern</h3><div class="when"></div><div class="meta"><span class="badge price">~$60</span><span class="badge dur">2 hr</span><span class="badge dist">1.4 mi</span></div><p class="desc">West Loop Italian.</p></div>
+  <div class="event food" data-title="The Strip Club Steakhouse"><h3>🥩 The Strip Club</h3><div class="when"></div><div class="meta"><span class="badge price">~$80</span><span class="badge dur">2 hr</span></div><p class="desc">Classic steakhouse.</p></div>
+  <div class="event food" data-title="The Bellevue"><h3>🍷 The Bellevue</h3><div class="when"></div><div class="meta"><span class="badge price">~$70</span><span class="badge dur">2 hr</span><span class="badge dist">1.3 mi</span></div><p class="desc">Gold Coast modern American.</p></div>
+  <div class="event food" data-title="Cleo's Southern Cuisine"><h3>🍗 Cleo's</h3><div class="when"></div><div class="meta"><span class="badge price">~$30</span><span class="badge dur">1.5 hr</span><span class="badge dist">2 mi</span></div><p class="desc">Soul food + fried chicken.</p></div>
+  <div class="event food" data-title="Harold's Chicken"><h3>🍗 Harold's Chicken</h3><div class="when"></div><div class="meta"><span class="badge price">~$15</span><span class="badge dur">45 min</span></div><p class="desc">Legendary fried chicken.</p></div>
+  <div class="event food" data-title="Batter and Berries"><h3>🥞 Batter and Berries</h3><div class="when"></div><div class="meta"><span class="badge price">~$25</span><span class="badge dur">1.5 hr</span><span class="badge dist">3.5 mi</span></div><p class="desc">French toast flight!</p></div>
+  <div class="event food" data-title="Taste 222"><h3>🍽️ Taste 222</h3><div class="when"></div><div class="meta"><span class="badge price">$$$</span><span class="badge dur">2 hr</span><span class="badge dist">1 mi</span></div><p class="desc">West Loop modern.</p></div>
+  <div class="event food" data-title="El Che Steakhouse"><h3>🥩 El Che</h3><div class="when"></div><div class="meta"><span class="badge price">~$85</span><span class="badge dur">2 hr</span><span class="badge dist">1.6 mi</span></div><p class="desc">Argentinian wood-fire.</p></div>
+  <div class="event food" data-title="Terrace 16"><h3>🌆 Terrace 16</h3><div class="when"></div><div class="meta"><span class="badge price">~$70</span><span class="badge dur">2 hr</span><span class="badge dist">0.6 mi</span></div><p class="desc">Trump Tower terrace.</p></div>
+  <div class="event food" data-title="YOLK"><h3>🍳 YOLK</h3><div class="when"></div><div class="meta"><span class="badge price">~$20</span><span class="badge dur">1 hr</span><span class="badge dist">0.5 mi</span></div><p class="desc">Vibrant brunch.</p></div>
+  <div class="event food" data-title="Tre Dita"><h3>🍴 Tre Dita</h3><div class="when"></div><div class="meta"><span class="badge price">$$$$</span><span class="badge dur">2 hr</span><span class="badge dist">0.7 mi</span></div><p class="desc">Tuscan splurge at St. Regis.</p></div>
+  <div class="event food" data-title="Levain Bakery"><h3>🍪 Levain</h3><div class="when"></div><div class="meta"><span class="badge price">~$8</span><span class="badge dur">30 min</span><span class="badge dist">0.6 mi</span></div><p class="desc">Famous 6-oz cookies.</p></div>
+  <div class="event food" data-title="Portillo's"><h3>🌭 Portillo's</h3><div class="when"></div><div class="meta"><span class="badge price">~$15</span><span class="badge dur">1 hr</span><span class="badge dist">0.7 mi</span></div><p class="desc">Chicago dog + Italian beef.</p></div>
+  <div class="event food" data-title="Giordano's"><h3>🍕 Giordano's</h3><div class="when"></div><div class="meta"><span class="badge price">~$30</span><span class="badge dur">1.5 hr</span><span class="badge dist">0.5 mi</span></div><p class="desc">Stuffed pizza.</p></div>
+  <div class="event food" data-title="Al's Italian Beef"><h3>🥖 Al's Italian Beef</h3><div class="when"></div><div class="meta"><span class="badge price">~$12</span><span class="badge dur">45 min</span><span class="badge dist">1 mi</span></div><p class="desc">"Dipped" w/ giardiniera.</p></div>
+</section>
+
+<!-- COFFEE -->
+<section class="tab-content" data-tab-content="coffee">
+  <h3 class="section-title">☕ Coffee</h3>
+  <div class="event must" data-title="Starbucks Reserve Roastery"><h3>⭐ Starbucks Reserve <span class="badge must">MUST</span></h3><div class="when"></div><div class="meta"><span class="badge price">$8–20</span><span class="badge dur">1.5 hr</span><span class="badge dist">0.7 mi</span></div><p class="desc">World's Largest Starbucks. 5 floors.</p></div>
+  <div class="event coffee" data-title="Holy Grounds Coffee"><h3>☕ Holy Grounds</h3><div class="when"></div><div class="meta"><span class="badge price">~$7</span><span class="badge dur">30 min</span><span class="badge dist">1.5 mi</span></div><p class="desc">Cozy neighborhood spot.</p></div>
+  <div class="event coffee" data-title="Ralph's Coffee"><h3>☕ Ralph's Coffee</h3><div class="when"></div><div class="meta"><span class="badge price">~$10</span><span class="badge dur">45 min</span><span class="badge dist">0.8 mi</span></div><p class="desc">Inside Ralph Lauren.</p></div>
+  <div class="event coffee" data-title="Goddess and The Baker"><h3>☕ Goddess and The Baker</h3><div class="when"></div><div class="meta"><span class="badge price">~$15</span><span class="badge dur">1 hr</span><span class="badge dist">0.3 mi</span></div><p class="desc">Aesthetic café.</p></div>
+</section>
+
+<!-- BARS -->
+<section class="tab-content" data-tab-content="bars">
+  <h3 class="section-title">🍸 Bars & Nightlife</h3>
+  <div class="event bar" data-title="Cindy's Rooftop"><h3>🌇 Cindy's Rooftop</h3><div class="when"></div><div class="meta"><span class="badge price">~$20</span><span class="badge dur">2 hr</span><span class="badge dist">0.3 mi</span></div><p class="desc">Views over Millennium Park.</p></div>
+  <div class="event bar" data-title="London House Rooftop"><h3>🌃 London House</h3><div class="when"></div><div class="meta"><span class="badge price">~$22</span><span class="badge dur">2 hr</span><span class="badge dist">0.4 mi</span></div><p class="desc">Three-tier rooftop.</p></div>
+  <div class="event bar" data-title="Moneygun Chicago"><h3>🍸 Moneygun</h3><div class="when"></div><div class="meta"><span class="badge price">~$18</span><span class="badge dur">2 hr</span><span class="badge dist">1.4 mi</span></div><p class="desc">Fulton Market cocktail bar.</p></div>
+  <div class="event bar" data-title="New Line Tavern"><h3>🍺 New Line Tavern</h3><div class="when"></div><div class="meta"><span class="badge price">~$10</span><span class="badge dur">1.5 hr</span><span class="badge dist">0.4 mi</span></div><p class="desc">Loop tavern.</p></div>
+  <div class="event bar" data-title="L Station Bar"><h3>🍻 L Station</h3><div class="when"></div><div class="meta"><span class="badge price">~$12</span><span class="badge dur">1.5 hr</span></div><p class="desc">Casual drinks + bites.</p></div>
+  <div class="event bar" data-title="Canal Street Chicago"><h3>🍹 Canal Street</h3><div class="when"></div><div class="meta"><span class="badge price">~$15</span><span class="badge dur">2 hr</span><span class="badge dist">0.6 mi</span></div><p class="desc">River-adjacent bar.</p></div>
+  <div class="event bar" data-title="Green Mill Jazz Club"><h3>🎷 Green Mill</h3><div class="when"></div><div class="meta"><span class="badge price">$15</span><span class="badge dur">2 hr</span><span class="badge dist">7 mi</span></div><p class="desc">Al Capone's jazz haunt.</p></div>
+  <div class="event bar" data-title="Kingston Mines"><h3>🎸 Kingston Mines</h3><div class="when"></div><div class="meta"><span class="badge price">$15</span><span class="badge dur">2 hr</span><span class="badge dist">5 mi</span></div><p class="desc">Blues till 4 AM.</p></div>
+</section>
+
+<!-- FAB to open itinerary drawer -->
+<button class="fab" onclick="openDrawerToItin()">
+  📅
+  <span class="badge-count" id="fabCount" style="display:none;">0</span>
+</button>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h3>➕ Add to Itinerary</h3>
+    <p class="event-name" id="modalEventTitle"></p>
+    <div class="field">
+      <label class="field-label">👥 Who?</label>
+      <div class="options">
+        <label><input type="radio" name="person" value="erica"> Erica</label>
+        <label><input type="radio" name="person" value="renee"> Renee</label>
+        <label><input type="radio" name="person" value="both" checked> Both</label>
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label">🏷️ Context</label>
+      <div class="options">
+        <label><input type="radio" name="type" value="self"> Self</label>
+        <label><input type="radio" name="type" value="group"> Group</label>
+        <label><input type="radio" name="type" value="justus" checked> Just Us</label>
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label">📆 Day & Time</label>
+      <div class="dt-row">
+        <select id="modalDay">
+          <option value="2025-06-07">Sun Jun 7</option>
+          <option value="2025-06-08">Mon Jun 8</option>
+          <option value="2025-06-09">Tue Jun 9</option>
+          <option value="2025-06-10" selected>Wed Jun 10</option>
+          <option value="2025-06-11">Thu Jun 11</option>
+        </select>
+        <input type="time" id="modalStart" value="18:00">
+        <input type="time" id="modalEnd" value="19:30">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-confirm" onclick="confirmAdd()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- DIRECTIONS MODAL -->
+<div class="modal-overlay" id="dirModal">
+  <div class="modal">
+    <div class="dir-modal-header">
+      <h3 id="dirTitle">Directions</h3>
+      <p id="dirSubtitle">From Staypineapple Hotel</p>
+      <button class="close-x" onclick="closeDirModal()">×</button>
+    </div>
+    <div id="dirBody"></div>
+  </div>
+</div>
+
+<script>
+  // ====== DATA ======
+  const HOTEL = { name: "Staypineapple Hotel", coords: [41.8831, -87.6293] };
+  const itinerary = { erica: [], renee: [] };
+  let activeEventEl = null;
+
+  const locations = {
+    "Flight LAX → ORD": [41.9742, -87.9073],
+    "ORD → Hotel (Blue Line)": [41.9742, -87.9073],
+    "Hotel → ORD": [41.9742, -87.9073],
+    "LinkedIn Chicago (Erica's Work)": [41.8807, -87.6418],
+    "OFI Chicago (Renee's Work)": [41.8831, -87.6273],
+    "Harry Potter Chicago": [41.8950, -87.6244],
+    "The Bean (Cloud Gate)": [41.8827, -87.6233],
+    "360 Chicago": [41.8989, -87.6231],
+    "Art Institute of Chicago": [41.8796, -87.6237],
+    "Magnificent Mile": [41.8950, -87.6244],
+    "Wendella Boat Tour": [41.8881, -87.6244],
+    "Skydeck at Willis Tower": [41.8789, -87.6359],
+    "Navy Pier": [41.8917, -87.6086],
+    "Chicago Riverwalk": [41.8881, -87.6253],
+    "Field Museum": [41.8663, -87.6170],
+    "Shedd Aquarium": [41.8676, -87.6140],
+    "Buckingham Fountain": [41.8758, -87.6189],
+    "Sneakerhead University": [41.9100, -87.6500],
+    "Alice & Wonder": [41.9270, -87.6519],
+    "Ride the L Train": [41.8831, -87.6273],
+    "Giants @ Cubs": [41.9484, -87.6553],
+    "Braves @ White Sox (Tue)": [41.8300, -87.6338],
+    "Braves @ White Sox (Wed)": [41.8300, -87.6338],
+    "Chicago Sky vs Atlanta Dream (Commissioner's Cup)": [41.8530, -87.6275],
+    "Wrigley Field Tour": [41.9484, -87.6553],
+    "Lou Malnati's": [41.8924, -87.6310],
+    "Lia Tavern": [41.8860, -87.6480],
+    "The Strip Club Steakhouse": [41.8500, -87.6300],
+    "The Bellevue": [41.9095, -87.6328],
+    "Cleo's Southern Cuisine": [41.9100, -87.6300],
+    "Harold's Chicken": [41.8770, -87.6230],
+    "Batter and Berries": [41.9270, -87.6520],
+    "Taste 222": [41.8780, -87.6478],
+    "El Che Steakhouse": [41.8853, -87.6485],
+    "Terrace 16": [41.8895, -87.6204],
+    "YOLK": [41.8868, -87.6266],
+    "Tre Dita": [41.8895, -87.6204],
+    "Levain Bakery": [41.8920, -87.6310],
+    "Portillo's": [41.8930, -87.6310],
+    "Giordano's": [41.8916, -87.6243],
+    "Al's Italian Beef": [41.8893, -87.6478],
+    "Starbucks Reserve Roastery": [41.8945, -87.6244],
+    "Holy Grounds Coffee": [41.8800, -87.6500],
+    "Ralph's Coffee": [41.8915, -87.6244],
+    "Goddess and The Baker": [41.8842, -87.6321],
+    "Cindy's Rooftop": [41.8826, -87.6249],
+    "London House Rooftop": [41.8881, -87.6253],
+    "Moneygun Chicago": [41.8867, -87.6481],
+    "New Line Tavern": [41.8870, -87.6400],
+    "L Station Bar": [41.8800, -87.6500],
+    "Canal Street Chicago": [41.8810, -87.6390],
+    "Green Mill Jazz Club": [41.9685, -87.6603],
+    "Kingston Mines": [41.9243, -87.6516]
+  };
+
+  const directions = {
+   "ORD → Hotel (Blue Line)": {
+      from: "Chicago O'Hare Airport (ORD)", route: "CTA Blue Line",
+      time: "45–60 min", cost: "$5",
+      steps: ["Follow signs in ORD for the CTA Trains / Blue Line.","Take the Blue Line toward Forest Park.","Get off at Washington Station.","Walk about 2 blocks east to the hotel at 1 W Washington St."],
+      note: "No transfers needed. Pay with Ventra app or tap a contactless card."
+    },
+    "Hotel → ORD": {
+      from: HOTEL.name, dest: "Chicago O'Hare Airport (ORD)",
+      route: "CTA Blue Line", time: "45–60 min", cost: "$2.50",
+      steps: ["Walk to Washington Blue Line Station (2 blocks west).","Take the Blue Line toward O'Hare.","Stay on until the last stop: O'Hare.","Follow signs to your terminal."],
+      note: "Return trip is only $2.50."
+    },
+    "Giants @ Cubs": {
+      dest: "Wrigley Field · 1060 W Addison St", route: "CTA Red Line",
+      time: "25–35 min", cost: "$2.50",
+      steps: ["Walk to Lake/State Red Line Station (4 blocks north).","Take the Red Line northbound toward Howard.","Get off at Addison Station.","Wrigley Field is right outside."],
+      note: "Trains get PACKED on game days. Allow 45 min total."
+    },
+    "Braves @ White Sox (Tue)": {
+      dest: "Rate Field · 333 W 35th St", route: "CTA Red Line",
+      time: "20–25 min", cost: "$2.50",
+      steps: ["Walk to Lake/State Red Line Station.","Take the Red Line southbound toward 95th/Dan Ryan.","Get off at Sox-35th Station.","Exit and walk west across the parking lot."],
+      note: "Same instructions for the Wednesday game."
+    },
+    "Braves @ White Sox (Wed)": {
+      dest: "Rate Field · 333 W 35th St", route: "CTA Red Line",
+      time: "20–25 min", cost: "$2.50",
+      steps: ["Walk to Lake/State Red Line Station.","Take the Red Line southbound toward 95th/Dan Ryan.","Get off at Sox-35th Station.","Exit and walk west to Rate Field."]
+    },
+    "Chicago Sky vs Atlanta Dream (Commissioner's Cup)": {
+      dest: "Wintrust Arena · 200 E Cermak Rd", route: "CTA Green Line",
+      time: "15–20 min", cost: "$2.50",
+      steps: ["Walk to Lake/State Station (4 blocks north).","Take the Green Line southbound toward Ashland/63rd.","Get off at Cermak-McCormick Place Station.","Walk 1 block east to Wintrust Arena."],
+      note: "Uber/Lyft is ~$12–15 and faster (10 min)."
+    },
+    "Wrigley Field Tour": {
+      dest: "Wrigley Field", route: "CTA Red Line", time: "25–35 min", cost: "$2.50",
+      steps: ["Walk to Lake/State Red Line Station.","Take Red Line northbound toward Howard.","Get off at Addison Station.","Stadium is outside the station."]
+    },
+    "Kingston Mines": {
+      dest: "Kingston Mines · 2548 N Halsted St", route: "Red Line + walk",
+      time: "25–30 min", cost: "$2.50",
+      steps: ["Walk to Lake/State Red Line Station.","Take Red Line northbound toward Howard.","Get off at Fullerton Station.","Walk west on Fullerton ~8 min to Halsted, south 1 block."],
+      note: "Late-night → consider Uber back (~$15)."
+    },
+    "Green Mill Jazz Club": {
+      dest: "Green Mill · 4802 N Broadway", route: "CTA Red Line",
+      time: "30–35 min", cost: "$2.50",
+      steps: ["Walk to Lake/State Red Line Station.","Take Red Line northbound toward Howard.","Get off at Lawrence Station.","Walk 1 block east to Broadway, then 1 block north."],
+      note: "Take Uber back after midnight (~$20)."
+    },
+    "Navy Pier": {
+      dest: "Navy Pier · 600 E Grand Ave", route: "Walk or Bus #65",
+      time: "25 min walk / 15 min bus", cost: "$2.25 bus / FREE walk",
+      steps: ["Walk: Head east on Washington, north on Michigan to Grand, then east to pier.","Bus: Walk to State/Lake, board Bus #65 eastbound on Grand.","Ride to the last stop at Navy Pier."],
+      note: "Walking is scenic — river views the whole way."
+    },
+    "Field Museum": {
+      dest: "Field Museum · 1400 S Lake Shore Dr", route: "CTA Bus #146",
+      time: "15–20 min", cost: "$2.25",
+      steps: ["Walk to State/Madison and board Bus #146 southbound.","Ride to Museum Campus stop.","Walk east — Field Museum is the first building."],
+      note: "Or walk ~25 min through Grant Park (passes Buckingham Fountain)."
+    },
+    "Shedd Aquarium": {
+      dest: "Shedd Aquarium · 1200 S Lake Shore Dr", route: "CTA Bus #146",
+      time: "15–20 min", cost: "$2.25",
+      steps: ["Walk to State/Madison and board Bus #146 southbound.","Ride to Museum Campus stop.","Shedd is past the Field Museum on the lakefront."]
+    },
+    "Starbucks Reserve Roastery": {
+      dest: "Starbucks Reserve · 646 N Michigan Ave", route: "Walking",
+      time: "14 min walk", cost: "FREE",
+      steps: ["Head north on State St for 3 blocks.","Turn east on Ontario St for 2 blocks.","Turn north on Michigan Ave for 1 block.","Entrance on the east side."],
+      note: "Go up to the top floor for cocktails!"
+    },
+    "Harry Potter Chicago": {
+      dest: "Harry Potter Chicago", route: "Walking · Mag Mile",
+      time: "15–20 min", cost: "FREE",
+      steps: ["Head north on State St.","Turn east on Grand, then north on Michigan Ave.","Venue along the Magnificent Mile."],
+      note: "Book online in advance!"
+    }
+  };
+
+  const catColors = {
+    sight: '#0ea5e9', must: '#f59e0b', work: '#555',
+    sport: '#16a34a', food: '#d97706', coffee: '#92400e',
+    bar: '#be185d', travel: '#8b5cf6'
+  };
+
+  // ====== HELPERS ======
+  function timeToMin(t) { const [h,m]=t.split(':').map(Number); return h*60+m; }
+  function formatTime(t) {
+    const [h,m]=t.split(':').map(Number);
+    const ampm=h>=12?'PM':'AM'; const hr=h%12||12;
+    return `${hr}:${m.toString().padStart(2,'0')} ${ampm}`;
+  }
+  function haversine(a, b) {
+    const toRad=x=>x*Math.PI/180; const R=3958.8;
+    const dLat=toRad(b[0]-a[0]), dLon=toRad(b[1]-a[1]);
+    const lat1=toRad(a[0]), lat2=toRad(b[0]);
+    const x=Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+    return 2*R*Math.asin(Math.sqrt(x));
+  }
+
+  const dayShort = {
+    '2025-06-07':'Sun Jun 7','2025-06-08':'Mon Jun 8','2025-06-09':'Tue Jun 9',
+    '2025-06-10':'Wed Jun 10','2025-06-11':'Thu Jun 11'
+  };
+  const dayLong = {
+    '2025-06-07':'Sunday, Jun 7','2025-06-08':'Monday, Jun 8','2025-06-09':'Tuesday, Jun 9',
+    '2025-06-10':'Wednesday, Jun 10','2025-06-11':'Thursday, Jun 11'
+  };
+  const typeLabels = { self:'Self', group:'With Group', justus:'Just Us' };
+
+  // ====== POPULATE "WHEN" BADGES + ACTION BUTTONS ======
+  document.querySelectorAll('.event').forEach(ev => {
+    const w = ev.querySelector('.when');
+    if (w) {
+      if (ev.dataset.date && ev.dataset.start) {
+        w.textContent = `📅 ${dayShort[ev.dataset.date]} · ${formatTime(ev.dataset.start)} – ${formatTime(ev.dataset.end)}`;
+      } else {
+        w.textContent = '⏰ Anytime — pick when adding';
+        w.classList.add('anytime');
+      }
+    }
+    // Add buttons
+    const row = document.createElement('div');
+    row.className = 'btn-row';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-btn';
+    addBtn.textContent = '+ Add to Itinerary';
+    addBtn.onclick = (e) => { e.stopPropagation(); openModal(ev); };
+    row.appendChild(addBtn);
+    if (locations[ev.dataset.title]) {
+      const dirBtn = document.createElement('button');
+      dirBtn.className = 'directions-btn';
+      dirBtn.textContent = '🧭 Directions';
+      dirBtn.onclick = (e) => { e.stopPropagation(); showDirections(ev.dataset.title); };
+      row.appendChild(dirBtn);
+    }
+    ev.appendChild(row);
+  });
+
+  // ====== TABS ======
+  document.querySelectorAll('.cat-tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.cat-tabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelector(`[data-tab-content="${btn.dataset.tab}"]`).classList.add('active');
+      window.scrollTo({ top: document.querySelector('.cat-tabs').offsetTop - 60, behavior: 'smooth' });
+    });
+  });
+
+  // ====== DRAWER ======
+  function openDrawer() {
+    document.getElementById('drawer').classList.add('open');
+    document.getElementById('drawerOverlay').classList.add('open');
+  }
+  function closeDrawer() {
+    document.getElementById('drawer').classList.remove('open');
+    document.getElementById('drawerOverlay').classList.remove('open');
+  }
+  function openDrawerToItin() {
+    openDrawer();
+    // switch to Erica tab by default
+    document.querySelectorAll('.drawer-tabs button').forEach(b => b.classList.remove('active'));
+    document.querySelector('.drawer-tabs button[data-pane="erica"]').classList.add('active');
+    document.querySelectorAll('.drawer-pane').forEach(p => p.classList.remove('active'));
+    document.querySelector('[data-pane-content="erica"]').classList.add('active');
+  }
+  document.querySelectorAll('.drawer-tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.drawer-tabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.drawer-pane').forEach(p => p.classList.remove('active'));
+      document.querySelector(`[data-pane-content="${btn.dataset.pane}"]`).classList.add('active');
+    });
+  });
+
+  // ====== MAP ======
+  const tripMap = L.map('tripMap', { scrollWheelZoom: false, zoomControl: true }).setView([41.8900, -87.6300], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19
+  }).addTo(tripMap);
+
+  function pinIcon(color) {
+    return L.divIcon({
+      className: 'custom-pin',
+      html: `<div style="width:18px;height:18px;border-radius:50% 50% 50% 0;
+        transform:rotate(-45deg);background:${color};border:2px solid white;
+        box-shadow:0 2px 4px rgba(0,0,0,0.4);"></div>`,
+      iconSize: [18,18], iconAnchor: [9,18], popupAnchor: [0,-18]
+    });
+  }
+
+  L.marker(HOTEL.coords, { icon: pinIcon('#1f4e8a') })
+    .addTo(tripMap).bindPopup(`<strong>🏨 ${HOTEL.name}</strong><br>1 W Washington St`);
+
+  const markerByTitle = {};
+  document.querySelectorAll('.event').forEach(ev => {
+    const title = ev.dataset.title;
+    const coords = locations[title];
+    if (!coords) return;
+    let cat = 'sight';
+    ['must','work','sport','food','coffee','bar','travel','sight'].forEach(c => {
+      if (ev.classList.contains(c)) cat = c;
+    });
+    const color = catColors[cat] || '#0ea5e9';
+    const dist = haversine(HOTEL.coords, coords).toFixed(2);
+    const sub = ev.querySelector('.subtitle')?.textContent || '';
+
+    const m = L.marker(coords, { icon: pinIcon(color) }).addTo(tripMap);
+    m.bindPopup(`
+      <strong>${title}</strong><br>
+      ${sub ? `<em>${sub}</em><br>` : ''}
+      <span class="pop-dist">📍 ${dist} mi from hotel</span><br>
+      <button class="pop-btn" onclick="showDirections('${title.replace(/'/g,"\\'")}')">🧭 Directions</button>
+    `);
+    markerByTitle[title] = m;
+
+    // Tap card → scroll to map + zoom
+    ev.addEventListener('click', (e) => {
+      if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+      document.querySelector('.map-section').scrollIntoView({ behavior:'smooth', block:'start' });
+      setTimeout(() => { tripMap.setView(coords, 15, { animate: true }); m.openPopup(); }, 400);
+    });
+  });
+  setTimeout(() => tripMap.invalidateSize(), 200);
+
+  // ====== ADD MODAL ======
+  function openModal(ev) {
+    activeEventEl = ev;
+    document.getElementById('modalEventTitle').textContent = ev.dataset.title;
+    if (ev.dataset.date) {
+      document.getElementById('modalDay').value = ev.dataset.date;
+      document.getElementById('modalStart').value = ev.dataset.start;
+      document.getElementById('modalEnd').value = ev.dataset.end;
+    } else {
+      document.getElementById('modalDay').value = '2025-06-10';
+      document.getElementById('modalStart').value = '18:00';
+      document.getElementById('modalEnd').value = '19:30';
+    }
+    document.getElementById('addModal').classList.add('show');
+  }
+  function closeModal() {
+    document.getElementById('addModal').classList.remove('show');
+    activeEventEl = null;
+  }
+  function confirmAdd() {
+    if (!activeEventEl) return;
+    const person = document.querySelector('input[name="person"]:checked').value;
+    const type = document.querySelector('input[name="type"]:checked').value;
+    const date = document.getElementById('modalDay').value;
+    const start = document.getElementById('modalStart').value;
+    const end = document.getElementById('modalEnd').value;
+    const title = activeEventEl.dataset.title;
+    if (start >= end) { alert('End time must be after start time.'); return; }
+    const targets = person === 'both' ? ['erica','renee'] : [person];
+    targets.forEach(p => itinerary[p].push({ id: Date.now()+Math.random(), date, start, end, title, type }));
+    closeModal();
+    renderAll();
+    // Show a quick confirmation
+    const fab = document.querySelector('.fab');
+    fab.style.transform = 'scale(1.2)';
+    setTimeout(() => fab.style.transform = '', 200);
+  }
+  function removeItem(person, id) {
+    itinerary[person] = itinerary[person].filter(i => i.id !== id);
+    renderAll();
+  }
+  document.getElementById('addModal').addEventListener('click', (e) => {
+    if (e.target.id === 'addModal') closeModal();
+  });
+
+  // ====== RENDER ITIN ======
+  function detectOverlaps(items) {
+    const ov = new Set();
+    for (let i=0; i<items.length; i++) for (let j=i+1; j<items.length; j++) {
+      if (items[i].date === items[j].date) {
+        const a1=timeToMin(items[i].start),a2=timeToMin(items[i].end);
+        const b1=timeToMin(items[j].start),b2=timeToMin(items[j].end);
+        if (a1<b2 && b1<a2) { ov.add(items[i].id); ov.add(items[j].id); }
+      }
+    }
+    return ov;
+  }
+  function renderPerson(person) {
+    const container = document.getElementById(`${person}-content`);
+    const warning = document.getElementById(`${person}-warning`);
+    const items = itinerary[person];
+    if (items.length === 0) {
+      container.innerHTML = `<p class="empty-itin">${person.charAt(0).toUpperCase()+person.slice(1)}'s schedule is empty.</p>`;
+      warning.classList.remove('show');
+      return;
+    }
+    items.sort((a,b) => a.date.localeCompare(b.date) || timeToMin(a.start)-timeToMin(b.start));
+    const ov = detectOverlaps(items);
+    warning.classList.toggle('show', ov.size > 0);
+    const grouped = {};
+    items.forEach(it => { (grouped[it.date] = grouped[it.date] || []).push(it); });
+    let html = '';
+    Object.keys(grouped).sort().forEach(d => {
+      html += `<div class="day-block"><h4>${dayLong[d] || d}</h4>`;
+      grouped[d].forEach(it => {
+        const oc = ov.has(it.id) ? 'overlap' : '';
+        html += `<div class="itin-item ${oc}">
+          <span class="time">${formatTime(it.start)} – ${formatTime(it.end)}</span>
+          ${it.title}
+          <span class="tag ${it.type}">${typeLabels[it.type]}</span>
+          <button class="remove" onclick="removeItem('${person}', ${it.id})">×</button>
+        </div>`;
+      });
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  }
+  function renderAll() {
+    renderPerson('erica');
+    renderPerson('renee');
+    const total = itinerary.erica.length + itinerary.renee.length;
+    const badge = document.getElementById('fabCount');
+    if (total > 0) {
+      badge.textContent = total;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  // ====== DIRECTIONS ======
+  function buildDefaultDirections(title) {
+    const coords = locations[title];
+    if (!coords) return null;
+    const dist = haversine(HOTEL.coords, coords);
+    if (dist <= 1.2) return {
+      dest: title, route: "Walking", time: `~${Math.round(dist*20)} min walk`, cost: "FREE",
+      steps: [`Exit hotel onto Washington St.`,`Use Google Maps for turn-by-turn (${dist.toFixed(2)} mi).`,`Loop streets are grid-pattern and easy to navigate.`],
+      note: "Flat terrain, great walking weather in June (~75°F)."
+    };
+    if (dist <= 5) return {
+      dest: title, route: "CTA Bus or Uber", time: `${Math.round(dist*4)}–${Math.round(dist*6)} min`,
+      cost: "$2.25 bus / ~$12 Uber",
+      steps: ["Check Transit app for closest bus route.","Tap Ventra at boarding.",`${dist.toFixed(2)} mi from hotel.`],
+      note: "For 2 people, Uber may be cheaper than 2 bus fares."
+    };
+    return {
+      dest: title, route: "CTA Train + walk or Uber", time: `${Math.round(dist*5)} min`,
+      cost: "$2.50 CTA / ~$20 Uber",
+      steps: ["Use Transit app for the right L line.","Allow 30+ min including walk.",`${dist.toFixed(2)} mi from hotel.`],
+      note: "Uber is safer at night for longer trips."
+    };
+  }
+  function showDirections(title) {
+    const d = directions[title] || buildDefaultDirections(title);
+    if (!d) { alert('No directions available.'); return; }
+    document.getElementById('dirTitle').textContent = `🧭 ${d.dest || title}`;
+    document.getElementById('dirSubtitle').textContent = `From ${d.from || HOTEL.name}`;
+    let html = `<div class="dir-route">
+      <div class="route-title">🚇 ${d.route}</div>
+      <div class="route-meta"><span><b>⏱</b> ${d.time}</span><span><b>💵</b> ${d.cost}</span></div>
+      <ol class="dir-steps">${d.steps.map(s=>`<li>${s}</li>`).join('')}</ol>
+    </div>`;
+    if (d.note) html += `<div class="dir-note"><strong>💡 Tip:</strong> ${d.note}</div>`;
+    document.getElementById('dirBody').innerHTML = html;
+    document.getElementById('dirModal').classList.add('show');
+  }
+  function closeDirModal() {
+    document.getElementById('dirModal').classList.remove('show');
+  }
+  document.getElementById('dirModal').addEventListener('click', (e) => {
+    if (e.target.id === 'dirModal') closeDirModal();
+  });
+
+  // ====== EXPORT ======
+  async function exportJPEG(person) {
+    const el = document.querySelector(`[data-pane-content="${person}"]`);
+    const removeBtns = el.querySelectorAll('.remove');
+    removeBtns.forEach(b => b.style.display = 'none');
+    try {
+      const canvas = await html2canvas(el, { backgroundColor:'#fff', scale: 2 });
+      const link = document.createElement('a');
+      link.download = `Chicago-Trip-${person.charAt(0).toUpperCase()+person.slice(1)}-Jun7-11.jpg`;
+      link.href = canvas.toDataURL('image/jpeg', 0.95);
+      link.click();
+    } catch (err) { alert('Error: ' + err.message); }
+    finally { removeBtns.forEach(b => b.style.display = ''); }
+  }
+  async function exportPDF(person) {
+    const el = document.querySelector(`[data-pane-content="${person}"]`);
+    const removeBtns = el.querySelectorAll('.remove');
+    removeBtns.forEach(b => b.style.display = 'none');
+    try {
+      const canvas = await html2canvas(el, { backgroundColor:'#fff', scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit:'pt', format:'letter', orientation:'portrait' });
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
+      const margin = 30;
+      const iw = pw - margin*2;
+      const ih = canvas.height * iw / canvas.width;
+      if (ih <= ph - margin*2) {
+        pdf.addImage(imgData,'PNG',margin,margin,iw,ih);
+      } else {
+        let pos = 0;
+        const pxPerPt = canvas.width / iw;
+        const phPx = (ph - margin*2) * pxPerPt;
+        while (pos < canvas.height) {
+          const sc = document.createElement('canvas');
+          sc.width = canvas.width;
+          sc.height = Math.min(phPx, canvas.height - pos);
+          const ctx = sc.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0,0,sc.width,sc.height);
+          ctx.drawImage(canvas, 0, pos, canvas.width, sc.height, 0, 0, canvas.width, sc.height);
+          const sd = sc.toDataURL('image/png');
+          const sh = sc.height / pxPerPt;
+          if (pos > 0) pdf.addPage();
+          pdf.addImage(sd,'PNG',margin,margin,iw,sh);
+          pos += phPx;
+        }
+      }
+      pdf.save(`Chicago-Trip-${person.charAt(0).toUpperCase()+person.slice(1)}-Jun7-11.pdf`);
+    } catch (err) { alert('Error: ' + err.message); }
+    finally { removeBtns.forEach(b => b.style.display = ''); }
+  }
+
+  // Prevent iOS double-tap zoom on buttons
+  document.querySelectorAll('button').forEach(b => b.style.touchAction = 'manipulation');
+</script>
+
+</body>
+</html>
