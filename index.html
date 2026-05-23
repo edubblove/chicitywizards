@@ -21,7 +21,7 @@
 
   /* TOP BAR */
   .topbar {
-    position: sticky; top: 0; z-index: 50;
+    position: sticky; top: 0; z-index: 9000;
     background: linear-gradient(135deg, #b22234, #1f4e8a);
     color: white; padding: 12px 14px;
     display: flex; align-items: center; gap: 12px;
@@ -39,14 +39,14 @@
   /* DRAWER */
   .drawer-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-    z-index: 90; opacity: 0; pointer-events: none;
+    z-index: 9998; opacity: 0; pointer-events: none;
     transition: opacity 0.25s;
   }
   .drawer-overlay.open { opacity: 1; pointer-events: auto; }
   .drawer {
     position: fixed; top: 0; left: 0; bottom: 0;
     width: min(88%, 360px); background: white;
-    z-index: 100; transform: translateX(-100%);
+    z-index: 9999; transform: translateX(-100%);
     transition: transform 0.3s; overflow-y: auto;
     display: flex; flex-direction: column;
   }
@@ -264,7 +264,7 @@
     background: #1f4e8a; color: white;
     border: none; cursor: pointer; font-size: 1.3em;
     box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-    z-index: 30; display: flex;
+    z-index: 8000; display: flex;
     align-items: center; justify-content: center;
   }
   .fab .badge-count {
@@ -279,7 +279,7 @@
   /* MODALS */
   .modal-overlay {
     display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.55); z-index: 200;
+    background: rgba(0,0,0,0.55); z-index: 10000;
     align-items: flex-end; justify-content: center;
   }
   .modal-overlay.show { display: flex; }
