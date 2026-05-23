@@ -625,6 +625,38 @@
   // ====== DATA ======
   const HOTEL = { name: "Staypineapple Hotel", coords: [41.8831, -87.6293] };
   const itinerary = { erica: [], renee: [] };
+
+  // ====== PERSISTENCE ======
+  const STORAGE_KEY = 'chicagoTripItinerary_v1';
+
+  function saveItinerary() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(itinerary));
+    } catch (e) {
+      console.warn('Could not save itinerary:', e);
+    }
+  }
+
+  function loadItinerary() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.erica) itinerary.erica = data.erica;
+        if (data.renee) itinerary.renee = data.renee;
+      }
+    } catch (e) {
+      console.warn('Could not load itinerary:', e);
+    }
+  }
+
+  function clearAllItineraries() {
+    if (!confirm('Clear ALL events from BOTH itineraries? This cannot be undone.')) return;
+    itinerary.erica = [];
+    itinerary.renee = [];
+    saveItinerary();
+    renderAll();
+  }
   let activeEventEl = null;
 
   const locations = {
@@ -944,6 +976,7 @@
     const targets = person === 'both' ? ['erica','renee'] : [person];
     targets.forEach(p => itinerary[p].push({ id: Date.now()+Math.random(), date, start, end, title, type }));
     closeModal();
+    saveItinerary();     // 👈 NEW LINE — saves to phone storage
     renderAll();
     // Show a quick confirmation
     const fab = document.querySelector('.fab');
@@ -952,6 +985,7 @@
   }
   function removeItem(person, id) {
     itinerary[person] = itinerary[person].filter(i => i.id !== id);
+    saveItinerary();     // 👈 NEW LINE — saves after removing
     renderAll();
   }
   document.getElementById('addModal').addEventListener('click', (e) => {
@@ -1113,6 +1147,10 @@
 
   // Prevent iOS double-tap zoom on buttons
   document.querySelectorAll('button').forEach(b => b.style.touchAction = 'manipulation');
+
+  // Add this near the very end of your <script>, before the closing </script>
+  loadItinerary();
+  renderAll();
 </script>
 
 </body>
