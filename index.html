@@ -1164,9 +1164,10 @@
   // Prevent iOS double-tap zoom on buttons
   document.querySelectorAll('button').forEach(b => b.style.touchAction = 'manipulation');
 
-  // Add this near the very end of your <script>, before the closing </script>
+  // Add this near the very end of your <script>, before the closing
   loadItinerary();
   renderAll();
+
 </script>
 <div class="save-toast" id="saveToast">💾 Itinerary saved!</div>
 </body>
